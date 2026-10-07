@@ -1,9 +1,12 @@
+from pathlib import Path
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi.responses import FileResponse
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.db.database import get_db
 from app.db.models import (
     CertificateGeneration,
@@ -103,4 +106,49 @@ def get_certificate_job_status(
         failed=job.failed_count,
         pending=pending,
         progress=progress,
+    )
+
+
+@router.get("/{certificate_id}")
+def get_certificate(
+    certificate_id: UUID,
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    certificate = db.get(CertificateGeneration, certificate_id)
+    if certificate is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Certificate not found",
+        )
+    if certificate.status is not CertificateGenerationStatus.SUCCESS:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Certificate is not available",
+        )
+    if not certificate.file_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Certificate file not found",
+        )
+
+    generated_directory = Path(settings.generated_certificates_dir).resolve()
+    try:
+        file_path = Path(certificate.file_path).resolve(strict=True)
+        file_path.relative_to(generated_directory)
+    except (OSError, RuntimeError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Certificate file not found",
+        ) from None
+
+    if not file_path.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Certificate file not found",
+        )
+
+    return FileResponse(
+        path=file_path,
+        media_type="application/pdf",
+        filename=f"certificate-{certificate_id}.pdf",
     )
