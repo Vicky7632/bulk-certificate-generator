@@ -43,7 +43,15 @@ def test_database() -> Generator[sessionmaker[Session], None, None]:
         engine.dispose()
 
 
-def test_create_certificate_job(test_database: sessionmaker[Session]) -> None:
+def test_create_certificate_job(
+    test_database: sessionmaker[Session],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.api.routes.certificates.process_generation_job",
+        lambda job_id: None,
+    )
+
     payload = {
         "event_name": "Python Bootcamp 2026",
         "organization_name": "ABC Institute",

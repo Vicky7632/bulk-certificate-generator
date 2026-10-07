@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -13,6 +13,7 @@ from app.schemas.certificate import (
     CertificateJobCreate,
     CertificateJobCreateResponse,
 )
+from app.workers.certificate_worker import process_generation_job
 
 router = APIRouter()
 
@@ -24,6 +25,7 @@ router = APIRouter()
 )
 def create_certificate_job(
     request: CertificateJobCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ) -> CertificateJobCreateResponse:
     job = GenerationJob(
@@ -59,6 +61,8 @@ def create_certificate_job(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create certificate job",
         ) from exc
+
+    background_tasks.add_task(process_generation_job, job.id)
 
     return CertificateJobCreateResponse(
         job_id=job.id,
