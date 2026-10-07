@@ -1,5 +1,6 @@
+from datetime import date
 from collections.abc import Generator
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -95,3 +96,70 @@ def test_create_certificate_job(
             and certificate.error_message is None
             for certificate in certificates
         )
+
+
+def test_get_job_status_calculates_progress(
+    test_database: sessionmaker[Session],
+) -> None:
+    with test_database() as db:
+        job = GenerationJob(
+            event_name="Status Test",
+            organization_name="ABC Institute",
+            issue_date=date(2026, 10, 7),
+            total_count=5,
+            success_count=3,
+            failed_count=1,
+            status=GenerationJobStatus.PROCESSING,
+        )
+        db.add(job)
+        db.commit()
+        job_id = job.id
+
+    with TestClient(app) as client:
+        response = client.get(f"/api/v1/certificates/jobs/{job_id}")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "job_id": str(job_id),
+        "status": "PROCESSING",
+        "total": 5,
+        "successful": 3,
+        "failed": 1,
+        "pending": 1,
+        "progress": 80.0,
+    }
+
+
+def test_get_job_status_returns_404_for_missing_job(
+    test_database: sessionmaker[Session],
+) -> None:
+    with TestClient(app) as client:
+        response = client.get(f"/api/v1/certificates/jobs/{uuid4()}")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Generation job not found"}
+
+
+def test_get_completed_job_status_has_full_progress(
+    test_database: sessionmaker[Session],
+) -> None:
+    with test_database() as db:
+        job = GenerationJob(
+            event_name="Completed Status Test",
+            organization_name="ABC Institute",
+            issue_date=date(2026, 10, 7),
+            total_count=3,
+            success_count=2,
+            failed_count=1,
+            status=GenerationJobStatus.COMPLETED,
+        )
+        db.add(job)
+        db.commit()
+        job_id = job.id
+
+    with TestClient(app) as client:
+        response = client.get(f"/api/v1/certificates/jobs/{job_id}")
+
+    assert response.status_code == 200
+    assert response.json()["pending"] == 0
+    assert response.json()["progress"] == 100.0

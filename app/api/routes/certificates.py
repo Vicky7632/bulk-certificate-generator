@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -12,6 +14,7 @@ from app.db.models import (
 from app.schemas.certificate import (
     CertificateJobCreate,
     CertificateJobCreateResponse,
+    JobStatusResponse,
 )
 from app.workers.certificate_worker import process_generation_job
 
@@ -68,4 +71,36 @@ def create_certificate_job(
         job_id=job.id,
         status=job.status.value,
         total=job.total_count,
+    )
+
+
+@router.get(
+    "/jobs/{job_id}",
+    response_model=JobStatusResponse,
+)
+def get_certificate_job_status(
+    job_id: UUID,
+    db: Session = Depends(get_db),
+) -> JobStatusResponse:
+    job = db.get(GenerationJob, job_id)
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Generation job not found",
+        )
+
+    pending = job.total_count - job.success_count - job.failed_count
+    progress = (
+        round((job.success_count + job.failed_count) / job.total_count * 100, 2)
+        if job.total_count
+        else 0.0
+    )
+    return JobStatusResponse(
+        job_id=job.id,
+        status=job.status.value,
+        total=job.total_count,
+        successful=job.success_count,
+        failed=job.failed_count,
+        pending=pending,
+        progress=progress,
     )
