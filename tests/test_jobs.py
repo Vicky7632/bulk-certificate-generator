@@ -4,7 +4,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -75,6 +75,7 @@ def test_create_certificate_job(
     with test_database() as db:
         job = db.get(GenerationJob, UUID(body["job_id"]))
         assert job is not None
+        assert db.scalar(select(func.count()).select_from(GenerationJob)) == 1
         assert job.total_count == 2
         assert job.success_count == 0
         assert job.failed_count == 0
