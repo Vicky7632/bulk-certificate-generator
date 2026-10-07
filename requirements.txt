@@ -3,6 +3,7 @@ uvicorn[standard]
 sqlalchemy
 psycopg[binary]
 pydantic-settings
+email-validator
 python-dotenv
 reportlab
 pytest
