@@ -1,19 +1,32 @@
 services:
   db:
-    image: postgres:18
+    image: postgres:16
     environment:
-      POSTGRES_DB: bulk_certificates
+      POSTGRES_DB: bulk_certificate_db
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d bulk_certificates"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d bulk_certificate_db"]
       interval: 5s
       timeout: 5s
       retries: 5
+
+  app:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/bulk_certificate_db
+      GENERATED_CERTIFICATES_DIR: /app/generated
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./generated:/app/generated
+    depends_on:
+      db:
+        condition: service_healthy
 
 volumes:
   postgres_data:

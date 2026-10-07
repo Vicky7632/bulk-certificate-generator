@@ -20,6 +20,7 @@ env/
 
 # Generated certificates
 generated/*.pdf
+generated/**/*.pdf
 
 # Test and type-check caches
 .pytest_cache/
